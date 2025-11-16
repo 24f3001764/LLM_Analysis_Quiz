@@ -23,10 +23,14 @@ WORKDIR /app
 # Copy requirements first to leverage Docker cache
 COPY --chown=user requirements.txt .
 
-# Install Python dependencies including Playwright
+# Install Python dependencies
 RUN pip install --user --no-cache-dir --upgrade pip && \
-    pip install --user --no-cache-dir -r requirements.txt && \
-    python -m playwright install --with-deps chromium
+    pip install --user --no-cache-dir -r requirements.txt
+
+# Install Playwright browsers as root
+USER root
+RUN python -m playwright install --with-deps chromium
+USER user
 
 # Final stage
 FROM python:3.9-slim
