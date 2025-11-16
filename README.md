@@ -1,12 +1,8 @@
-# LLM_Analysis_Quiz
-
 ---
-title: {{title}}
-emoji: {{emoji}}
-colorFrom: {{colorFrom}}
-colorTo: {{colorTo}}
-sdk: {{sdk}}
-sdk_version: "{{sdkVersion}}"
-app_file: app.py
+title: LLM_Analysis_Quiz
+emoji: 👁
+colorFrom: purple
+colorTo: green
+sdk: docker
 pinned: false
 ---
