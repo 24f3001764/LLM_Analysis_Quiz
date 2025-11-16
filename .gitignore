@@ -1,3 +1,14 @@
+# virtual environment
+venv
+
+# pyc files
+*.pyc
+
+# Project Plan
 Project_Plan.md
+
+# Project Report
 Project.md
+
+# Environment Variables
 .env
