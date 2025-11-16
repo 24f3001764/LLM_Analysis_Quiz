@@ -1,5 +1,11 @@
 # virtual environment
-venv
+venv/
+
+# logs
+logs/
+
+# llm_analysis_quiz.egg-info
+llm_analysis_quiz.egg-info/
 
 # pyc files
 *.pyc

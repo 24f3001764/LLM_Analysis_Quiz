@@ -45,9 +45,29 @@ class QuizSolver:
     
     def _parse_quiz_data(self):
         """Parse the raw quiz data into structured questions."""
-        # This is a placeholder implementation
-        # In a real implementation, this would parse the quiz HTML/JSON
-        # and create QuizQuestion objects
+        try:
+            if not self.quiz_data or 'questions' not in self.quiz_data:
+                logger.warning("No questions found in quiz data")
+                return
+                
+            for q in self.quiz_data['questions']:
+                question_id = q.get('id', f"q{len(self.questions) + 1}")
+                question_text = q.get('text', '').strip()
+                question_type = q.get('type', 'text')
+                options = q.get('options', [])
+                
+                # Create question object
+                question = QuizQuestion(
+                    question_id=question_id,
+                    question_text=question_text,
+                    question_type=question_type,
+                    options=options
+                )
+                self.questions.append(question)
+                
+        except Exception as e:
+            logger.error(f"Error parsing quiz data: {str(e)}")
+            raise
         
         # Example: Extract questions from a hypothetical format
         # This needs to be adapted to the actual quiz format
@@ -89,32 +109,35 @@ class QuizSolver:
         else:
             return 'text'
     
-    async def solve(self) -> Dict[str, Any]:
+    def solve_quiz(self) -> List[Dict[str, Any]]:
         """
-        Solve all questions in the quiz.
+        Solve the quiz questions.
         
         Returns:
-            Dict containing the answers and metadata
+            List of dictionaries containing question IDs and answers
         """
-        results = {
-            "questions_answered": 0,
-            "answers": []
-        }
-        
+        results = []
         for question in self.questions:
             try:
-                answer = await self._solve_question(question)
-                question.answer = answer
-                results["answers"].append(question.to_dict())
-                results["questions_answered"] += 1
+                answer = self._solve_question(question)
+                results.append({
+                    'question_id': question.question_id,
+                    'question_type': question.question_type,
+                    'answer': answer,
+                    'confidence': self._calculate_confidence(question, answer)
+                })
             except Exception as e:
                 logger.error(f"Error solving question {question.question_id}: {str(e)}")
-                # Continue with next question even if one fails
-                continue
-        
+                results.append({
+                    'question_id': question.question_id,
+                    'question_type': question.question_type,
+                    'answer': None,
+                    'error': str(e),
+                    'confidence': 0.0
+                })
         return results
     
-    async def _solve_question(self, question: QuizQuestion) -> Any:
+    def _solve_question(self, question: QuizQuestion) -> Any:
         """
         Solve a single quiz question.
         
