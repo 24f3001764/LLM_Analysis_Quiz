@@ -1,0 +1,44 @@
+[build-system]
+requires = ["setuptools>=42", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "llm_analysis_quiz"
+version = "0.1.0"
+description = "LLM Analysis Quiz Application"
+readme = "README.md"
+requires-python = ">=3.8"
+dependencies = [
+    "fastapi>=0.68.0",
+    "uvicorn>=0.15.0",
+    "aiohttp>=3.8.0",
+    "pydantic>=1.8.0",
+    "python-multipart>=0.0.5",
+    "python-dotenv>=0.19.0",
+    "pytest>=6.0.0",
+    "pytest-asyncio>=0.15.0",
+    "playwright>=1.20.0",
+    "PyPDF2>=2.0.0",
+    "python-docx>=0.8.11",
+    "python-pptx>=0.6.21",
+    "openpyxl>=3.0.9",
+    "Pillow>=9.0.0",
+    "pytesseract>=0.3.8",
+    "python-magic>=0.4.24"
+]
+
+[project.optional-dependencies]
+dev = [
+    "black>=21.7b0",
+    "isort>=5.9.3",
+    "flake8>=3.9.2",
+    "mypy>=0.910",
+    "pytest-cov>=2.12.0",
+    "pre-commit>=2.15.0"
+]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+python_files = "test_*.py"
+addopts = "-v --cov=src --cov-report=term-missing"

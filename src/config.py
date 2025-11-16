@@ -93,23 +93,24 @@ class Settings(BaseSettings):
     def validate_cors_origins(cls, v):
         if isinstance(v, str):
             try:
-                v = json.loads(v)
+                return json.loads(v)
             except json.JSONDecodeError:
-                v = [v]
-        return v
-    
-    # Validate file types
-    @validator('ALLOWED_FILE_TYPES', pre=True)
-    def validate_file_types(cls, v):
-        if isinstance(v, str):
-            return [t.strip() for t in v.split(',')]
+                return [v]
         return v
     
     class Config:
         env_file = ".env"
+        env_file_encoding = "utf-8"
         case_sensitive = True
+    
+    @property
+    def downloads_path(self) -> Path:
+        """Get the absolute path to the downloads directory."""
+        path = Path(self.downloads_dir)
+        path.mkdir(parents=True, exist_ok=True)
+        return path.absolute()
 
-# Create settings instance
+# Global settings instance
 settings = Settings()
 
 # Export settings

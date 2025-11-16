@@ -1,49 +1,150 @@
-from playwright.async_api import async_playwright, Page, ElementHandle
-from typing import Union, Optional, Dict, Any, List, Tuple, BinaryIO
-import asyncio
-import logging
-from pathlib import Path
-import json
-import base64
-from urllib.parse import urljoin, urlparse
-import mimetypes
-import magic
-import re
-import io
-import tempfile
-from datetime import datetime
+from __future__ import annotations
 
-# File processing libraries
-try:
-    import PyPDF2
-except ImportError:
-    PyPDF2 = None
+import asyncio
+import base64
+import functools
+import hashlib
+import io
+import json
+import logging
+import mimetypes
+import re
+import tempfile
+import time
+from contextlib import asynccontextmanager
+from datetime import datetime, timedelta
+from pathlib import Path
+from typing import (
+    Any, AsyncGenerator, BinaryIO, Callable, Dict, List, Optional, 
+    Tuple, Type, TypeVar, Union, cast
+)
+from urllib.parse import urljoin, urlparse
+
+import aiohttp
+import magic
+from playwright.async_api import (
+    Browser, BrowserContext, ElementHandle, Error as PlaywrightError,
+    Page, Playwright, TimeoutError as PlaywrightTimeoutError,
+    async_playwright
+)
+
+# Type variable for generic return types
+T = TypeVar('T')
+
+# Configure logging
+logger = logging.getLogger(__name__)
+
+# Custom exceptions
+class BrowserError(Exception):
+    """Base exception for browser-related errors."""
+    pass
+
+class NavigationError(BrowserError):
+    """Raised when navigation to a URL fails."""
+    pass
+
+class ExtractionError(BrowserError):
+    """Raised when content extraction fails."""
+    pass
+
+class FileProcessingError(BrowserError):
+    """Raised when file processing fails."""
+    pass
+
+def retry(
+    max_retries: int = 3,
+    delay: float = 1.0,
+    backoff: float = 2.0,
+    exceptions: tuple[Type[Exception], ...] = (Exception,),
+    logger: Optional[logging.Logger] = None
+) -> Callable[..., Callable[..., Any]]:
+    """
+    Decorator that implements retry logic with exponential backoff.
     
-try:
-    import docx
-except ImportError:
-    docx = None
+    Args:
+        max_retries: Maximum number of retry attempts
+        delay: Initial delay between retries in seconds
+        backoff: Backoff multiplier for delay between retries
+        exceptions: Tuple of exceptions to catch and retry on
+        logger: Optional logger for retry attempts
+    """
+    def decorator(func: Callable[..., T]) -> Callable[..., T]:
+        @functools.wraps(func)
+        async def async_wrapper(*args: Any, **kwargs: Any) -> T:
+            retries = 0
+            current_delay = delay
+            
+            while True:
+                try:
+                    return await func(*args, **kwargs)
+                except exceptions as e:
+                    retries += 1
+                    if retries > max_retries:
+                        if logger:
+                            logger.error(
+                                f"Max retries ({max_retries}) exceeded for {func.__name__}: {str(e)}"
+                            )
+                        raise
+                    
+                    if logger:
+                        logger.warning(
+                            f"Retry {retries}/{max_retries} for {func.__name__} "
+                            f"after {current_delay:.2f}s: {str(e)}"
+                        )
+                    
+                    await asyncio.sleep(current_delay)
+                    current_delay *= backoff
+        
+        return async_wrapper
+    return decorator
+
+# File processing libraries with lazy imports
+class LazyImport:
+    """Lazy import helper to defer imports until needed."""
+    def __init__(self, module_name: str):
+        self.module_name = module_name
+        self.module = None
     
-try:
-    from pptx import Presentation
-except ImportError:
-    Presentation = None
-    
-try:
-    import openpyxl
-except ImportError:
-    openpyxl = None
-    
-try:
-    from PIL import Image
-    import pytesseract
-except ImportError:
-    Image = None
-    pytesseract = None
+    def __getattr__(self, name: str) -> Any:
+        if self.module is None:
+            try:
+                if self.module_name == 'PyPDF2':
+                    import PyPDF2
+                    self.module = PyPDF2
+                elif self.module_name == 'docx':
+                    import docx
+                    self.module = docx
+                elif self.module_name == 'pptx.Presentation':
+                    from pptx import Presentation
+                    self.module = Presentation
+                elif self.module_name == 'openpyxl':
+                    import openpyxl
+                    self.module = openpyxl
+                elif self.module_name == 'PIL.Image':
+                    from PIL import Image
+                    self.module = Image
+                elif self.module_name == 'pytesseract':
+                    import pytesseract
+                    self.module = pytesseract
+                else:
+                    self.module = __import__(self.module_name)
+            except ImportError as e:
+                logger.warning(f"Failed to import {self.module_name}: {str(e)}")
+                raise ImportError(
+                    f"{self.module_name} is required for this feature. "
+                    f"Install with: pip install {self.module_name.lower()}"
+                ) from e
+        return getattr(self.module, name)
+
+# Lazy imports for optional dependencies
+PyPDF2 = LazyImport('PyPDF2')
+docx = LazyImport('docx')
+Presentation = LazyImport('pptx.Presentation')
+openpyxl = LazyImport('openpyxl')
+PIL_Image = LazyImport('PIL.Image')
+pytesseract = LazyImport('pytesseract')
 
 from .config import settings
-
-logger = logging.getLogger(__name__)
 
 # Supported file types and their MIME types
 SUPPORTED_FILE_TYPES = {
@@ -68,17 +169,51 @@ OCR_SUPPORTED = {'png', 'jpg', 'jpeg', 'tiff', 'bmp'}
 
 class BrowserManager:
     """
-    Manages browser instances and provides methods for web scraping.
-    Uses Playwright for headless browser automation.
+    Manages browser instances and provides methods for web scraping and automation.
+    
+    This class provides a high-level interface for browser automation using Playwright,
+    with built-in retry logic, error handling, and resource management.
     """
     
-    def __init__(self, headless: bool = True):
+    def __init__(
+        self, 
+        headless: bool = settings.HEADLESS_BROWSER,
+        timeout: float = settings.BROWSER_TIMEOUT,
+        user_agent: Optional[str] = None,
+        viewport: Optional[Dict[str, int]] = None,
+        ignore_https_errors: bool = False
+    ) -> None:
+        """
+        Initialize the BrowserManager.
+        
+        Args:
+            headless: Whether to run the browser in headless mode
+            timeout: Default navigation timeout in seconds
+            user_agent: Custom user agent string
+            viewport: Viewport dimensions as {'width': int, 'height': int}
+            ignore_https_errors: Whether to ignore HTTPS errors
+        """
         self.headless = headless
-        self.browser = None
-        self.context = None
-        self.page = None
-        self._magic = magic.Magic(mime=True)
-        self.playwright = None
+        self.timeout = timeout * 1000  # Convert to ms for Playwright
+        self.user_agent = user_agent or (
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 '
+            '(KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+        )
+        self.viewport = viewport or {'width': 1920, 'height': 1080}
+        self.ignore_https_errors = ignore_https_errors
+        
+        # Initialize instance variables
+        self.playwright: Optional[Playwright] = None
+        self.browser: Optional[Browser] = None
+        self.context: Optional[BrowserContext] = None
+        self.page: Optional[Page] = None
+        
+        # Initialize magic for MIME type detection
+        try:
+            self._magic = magic.Magic(mime=True)
+        except Exception as e:
+            logger.warning(f"Failed to initialize magic: {str(e)}")
+            self._magic = None
     
     async def __aenter__(self):
         """Initialize the browser and context when entering the context manager."""
