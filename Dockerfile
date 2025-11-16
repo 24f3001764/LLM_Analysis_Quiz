@@ -12,9 +12,6 @@ RUN curl -fsSL https://deb.nodesource.com/setup_18.x | bash - && \
     apt-get install -y nodejs && \
     npm install -g playwright
 
-# Install Playwright browsers as root
-RUN python -m playwright install --with-deps chromium
-
 # Create a non-root user and switch to it
 RUN useradd -m -u 1000 user
 USER user
@@ -26,9 +23,10 @@ WORKDIR /app
 # Copy requirements first to leverage Docker cache
 COPY --chown=user requirements.txt .
 
-# Install Python dependencies
+# Install Python dependencies including Playwright
 RUN pip install --user --no-cache-dir --upgrade pip && \
-    pip install --user --no-cache-dir -r requirements.txt
+    pip install --user --no-cache-dir -r requirements.txt && \
+    python -m playwright install --with-deps chromium
 
 # Final stage
 FROM python:3.9-slim
@@ -73,6 +71,9 @@ COPY --from=builder --chown=user /home/user/.cache/ms-playwright /home/user/.cac
 
 # Copy application code
 COPY --chown=user . .
+
+# Set environment variables
+ENV PLAYWRIGHT_BROWSERS_PATH=/home/user/.cache/ms-playwright
 
 # Expose the port the app runs on
 EXPOSE 8000
