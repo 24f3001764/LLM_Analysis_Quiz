@@ -4,7 +4,13 @@ FROM python:3.9-slim as builder
 # Install system dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
+    curl \
     && rm -rf /var/lib/apt/lists/*
+
+# Install Node.js (required for Playwright)
+RUN curl -fsSL https://deb.nodesource.com/setup_18.x | bash - && \
+    apt-get install -y nodejs && \
+    npm install -g playwright
 
 # Create a non-root user and switch to it
 RUN useradd -m -u 1000 user
@@ -47,6 +53,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libx11-xcb1 \
     # For python-magic
     libmagic1 \
+    # For Node.js
+    nodejs \
     && rm -rf /var/lib/apt/lists/*
 
 # Create a non-root user and switch to it
