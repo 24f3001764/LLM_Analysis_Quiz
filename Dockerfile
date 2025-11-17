@@ -9,12 +9,9 @@ ENV \
     PYTHONDONTWRITEBYTECODE=1 \
     PIP_NO_CACHE_DIR=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1 \
-    POETRY_VERSION=1.6.1 \
     PATH="/home/pwuser/.local/bin:${PATH}" \
     PYTHONPATH="/app:${PYTHONPATH:-}" \
-    PORT=8000 \
-    REQUESTS_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt \
-    SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt
+    PORT=8000
 
 # Install system dependencies
 USER root
@@ -25,11 +22,12 @@ RUN apt-get update && \
     ca-certificates \
     build-essential \
     python3-dev \
+    python3-venv \
     && update-ca-certificates --fresh \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Poetry using pip with --user flag
-RUN pip install --user --no-cache-dir poetry==${POETRY_VERSION}
+RUN pip install --user --no-cache-dir poetry==1.6.1
 
 # Set working directory
 WORKDIR /app
@@ -43,8 +41,8 @@ COPY --chown=pwuser pyproject.toml poetry.lock* ./
 
 # Install Python dependencies with verbose output
 RUN echo "Installing Python dependencies..." && \
-    python -m poetry config virtualenvs.create false && \
-    python -m poetry install --no-interaction --no-ansi --only main --no-cache -v
+    python -m pip install --upgrade pip && \
+    python -m pip install --no-cache-dir -v -e .
 
 # Install Playwright browsers
 RUN playwright install --with-deps
