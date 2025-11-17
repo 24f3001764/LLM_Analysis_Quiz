@@ -35,6 +35,10 @@ WORKDIR /app
 # Copy only the files needed for installing dependencies first
 COPY --chown=pwuser pyproject.toml poetry.lock* ./
 
+# Create src directory if it doesn't exist and set proper permissions
+RUN mkdir -p /app/src && \
+    chown -R pwuser:pwuser /app/src
+
 # Install Python dependencies
 RUN python -m poetry config virtualenvs.create false && \
     python -m poetry install --no-interaction --no-ansi --only main --no-cache
