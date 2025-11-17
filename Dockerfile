@@ -23,11 +23,17 @@ RUN apt-get update && \
     libmagic1 \
     curl \
     ca-certificates \
+    build-essential \
+    python3-dev \
     && update-ca-certificates --fresh \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Poetry
-RUN pip install --user --no-cache-dir poetry==${POETRY_VERSION}
+# Install Poetry with a more reliable method
+ENV POETRY_HOME=/opt/poetry
+RUN curl -sSL https://install.python-poetry.org | python3 - --version ${POETRY_VERSION} && \
+    cd /usr/local/bin && \
+    ln -s /opt/poetry/bin/poetry && \
+    poetry config virtualenvs.create false
 
 # Set working directory
 WORKDIR /app
@@ -35,13 +41,13 @@ WORKDIR /app
 # Copy only the files needed for installing dependencies first
 COPY --chown=pwuser pyproject.toml poetry.lock* ./
 
-# Create src directory if it doesn't exist and set proper permissions
-RUN mkdir -p /app/src && \
-    chown -R pwuser:pwuser /app/src
+# Create necessary directories with correct permissions
+RUN mkdir -p /app/src /app/logs /app/downloads /app/temp && \
+    chown -R pwuser:pwuser /app
 
-# Install Python dependencies
-RUN python -m poetry config virtualenvs.create false && \
-    python -m poetry install --no-interaction --no-ansi --only main --no-cache
+# Install Python dependencies with more verbose output
+RUN echo "Installing Python dependencies..." && \
+    poetry install --no-interaction --no-ansi --only main --no-cache -v
 
 # Install Playwright browsers
 RUN playwright install --with-deps
