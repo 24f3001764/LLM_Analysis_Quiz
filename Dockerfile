@@ -28,8 +28,7 @@ RUN pip install --user --no-cache-dir --upgrade pip && \
     pip install --user --no-cache-dir -r requirements.txt && \
     python -m pip install --user --no-cache-dir playwright
 
-# Install Playwright browsers (run as root, then fix permissions)
-USER root
+# Install Playwright browsers and dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libnss3 \
     libnspr4 \
@@ -50,9 +49,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libx11-xcb1 \
     && rm -rf /var/lib/apt/lists/*
 
-# Switch back to user and install browsers
-USER user
-RUN python -m playwright install --with-deps chromium
+# Install Playwright browsers as non-root user
+RUN playwright install --with-deps chromium
 
 # Final stage
 FROM python:3.9-slim
