@@ -43,7 +43,7 @@ jobs:
           libxkbcommon0 \
           libxcomposite1 \
           libxdamage1 \
-          libxfixes4 \
+          libxfixes3 \
           libxrandr2 \
           libgbm1 \
           libasound2t64  # Updated for Ubuntu 24.04
