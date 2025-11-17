@@ -181,3 +181,35 @@ class QuizSolver:
             "message": "Answers submitted successfully",
             "answers_submitted": len(answers)
         }
+    
+    def solve_all(self) -> List[Dict[str, Any]]:
+        """Solve all questions in the quiz."""
+        if not hasattr(self, 'questions') or not self.questions:
+            logger.warning("No questions to solve")
+            return []
+        
+        answers = []
+        for question in self.questions:
+            answer = self._solve_question(question)
+            answers.append({
+                "question_id": question.get("id", f"q{len(answers) + 1}"),
+                "answer": answer
+            })
+        return answers
+
+    def generate_report(self) -> str:
+        """Generate a report of the quiz results."""
+        if not hasattr(self, 'questions') or not self.questions:
+            return "No questions available for reporting."
+        
+        report = ["Quiz Report", "============", ""]
+        
+        for i, question in enumerate(self.questions, 1):
+            report.append(f"Question {i}: {question.get('text', 'No question text')}")
+            if 'answer' in question:
+                report.append(f"  Answer: {question['answer']}")
+            else:
+                report.append("  Not answered")
+            report.append("")
+        
+        return "\n".join(report)

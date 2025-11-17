@@ -1,4 +1,6 @@
 import pytest
+from playwright.async_api import async_playwright
+import asyncio
 from fastapi.testclient import TestClient
 from unittest.mock import AsyncMock, MagicMock, patch
 import os
@@ -11,6 +13,21 @@ sys.path.insert(0, str(Path(__file__).parent.parent / 'src'))
 from src.main import app
 from src.browser import BrowserManager
 from src.quiz_solver import QuizSolver, QuizQuestion
+
+@pytest.fixture(scope="session")
+def event_loop():
+    """Create an instance of the default event loop for the test session."""
+    loop = asyncio.get_event_loop_policy().new_event_loop()
+    yield loop
+    loop.close()
+
+@pytest.fixture(scope="session")
+async def browser():
+    """Create a browser instance for tests."""
+    async with async_playwright() as p:
+        browser = await p.chromium.launch()
+        yield browser
+        await browser.close()
 
 @pytest.fixture
 def test_client():

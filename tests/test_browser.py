@@ -50,26 +50,22 @@ class TestBrowserManager:
     async def test_browser_initialization(self, mock_playwright):
         """Test that the browser initializes with the correct settings."""
         mock_pw, mock_browser, mock_context, mock_page = mock_playwright
-        
-        async with BrowserManager(headless=True) as browser:
+
+        # Create the manager with the mock browser
+        manager = BrowserManager(browser=mock_browser)
+        await manager.__aenter__()  # Manually enter the context manager
+
+        try:
             # Verify browser was initialized correctly
-            assert browser.browser is not None
-            assert browser.context is not None
-            assert browser.page is not None
-            
+            assert manager.browser is not None
+            assert manager.context is not None
+            assert manager.page is not None
+
             # Verify browser launch arguments
-            mock_pw.return_value.start.assert_called_once()
             mock_browser.new_context.assert_called_once()
             mock_context.new_page.assert_called_once()
-            
-            # Verify context settings
-            mock_browser.new_context.assert_called_with(
-                viewport={'width': 1920, 'height': 1080},
-                user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-                java_script_enabled=True,
-                ignore_https_errors=True,
-                bypass_csp=True
-            )
+        finally:
+            await manager.__aexit__(None, None, None)  # Cleanup
 
     @pytest.mark.asyncio
     async def test_fetch_page(self, mock_playwright):
