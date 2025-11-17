@@ -6,26 +6,25 @@ on:
   pull_request:
     branches: [ main, master ]
 
+env:
+  PYTHONUNBUFFERED: 1
+  PYTHONFAULTHANDLER: 1
+  PYTHONHASHSEED: 42
+
 jobs:
   test:
+    name: Test Python ${{ matrix.python-version }}
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
-        python-version: ["3.8", "3.9", "3.10", "3.11", "3.12"]
-        include:
-          - python-version: "3.8"
-            experimental: false
-          - python-version: "3.9"
-            experimental: false
-          - python-version: "3.10"
-            experimental: false
-          - python-version: "3.11"
-            experimental: false
-          - python-version: "3.12"
-            experimental: false
+        python-version: ["3.9", "3.10", "3.11", "3.12"]
 
     steps:
-    - uses: actions/checkout@v3
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
     
     - name: Set up Python ${{ matrix.python-version }}
       uses: actions/setup-python@v4
@@ -36,43 +35,77 @@ jobs:
     - name: Install system dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y libmagic1  # Required for python-magic
-        
+        sudo apt-get install -y \
+          libmagic1 \
+          libnss3 \
+          libnspr4 \
+          libatk1.0-0 \
+          libatk-bridge2.0-0 \
+          libcups2 \
+          libdrm2 \
+          libxkbcommon0 \
+          libxcomposite1 \
+          libxdamage1 \
+          libxfixes3 \
+          libxrandr2 \
+          libgbm1 \
+          libasound2 \
+          libatspi2.0-0 \
+          libxshmfence1
+
     - name: Install Python dependencies
       run: |
         python -m pip install --upgrade pip
-        # Install package in development mode with test dependencies
         pip install -e ".[dev]"
-        # Ensure httpx is installed for test client
-        pip install httpx
+        # Install Playwright browsers
+        python -m playwright install --with-deps
+        python -m playwright install-deps
     
-    - name: Debug Python info
+    - name: Run tests with coverage
+      id: tests
+      continue-on-error: false
       run: |
-        python --version
-        python -m pip --version
-        which python
-        ls -la
-        
-    - name: Run tests
-      run: |
-        # Create test results directory
-        mkdir -p junit
-        # Run tests with coverage and JUnit output
-        python -m pytest --cov=src --cov-report=xml --junitxml=junit/test-results.xml tests/
-        # Verify test results file was created
-        echo "Test results:"
-        ls -la junit/
+        mkdir -p test-results
+        set +e
+        python -m pytest \
+          --cov=src \
+          --cov-report=xml:coverage.xml \
+          --junitxml=test-results/junit.xml \
+          -v \
+          tests/
+        TEST_RESULT=$?
+        echo "Test exit code: $TEST_RESULT"
+        # Always upload test results, even on test failure
+        echo "test_result=$TEST_RESULT" >> $GITHUB_OUTPUT
+        exit $TEST_RESULT
       
-    - name: Upload coverage to Codecov
-      uses: codecov/codecov-action@v3
-      with:
-        file: ./coverage.xml
-        fail_ci_if_error: false
-        
     - name: Upload test results
       if: always()
       uses: actions/upload-artifact@v4
       with:
-        name: test-results
-        path: junit/test-results.xml
+        name: test-results-${{ matrix.python-version }}
+        path: |
+          test-results/
+          coverage.xml
         retention-days: 7
+        
+    - name: Upload coverage to Codecov
+      if: success() || failure()
+      uses: codecov/codecov-action@v4
+      with:
+        token: ${{ secrets.CODECOV_TOKEN }}
+        file: ./coverage.xml
+        fail_ci_if_error: false
+        verbose: true
+
+    - name: Show test output on failure
+      if: failure()
+      run: |
+        echo "=== Test Output ==="
+        cat test-results/junit.xml
+        
+    - name: Fail if tests failed
+      if: steps.tests.outcome == 'failure'
+      run: |
+        echo "Tests failed - see test output above"
+        exit 1
