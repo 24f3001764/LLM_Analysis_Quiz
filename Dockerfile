@@ -25,10 +25,9 @@ RUN apt-get update && \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Poetry
-RUN curl -sSL https://install.python-poetry.org | python3 - && \
-    cd /usr/local/bin && \
-    ln -s /opt/poetry/bin/poetry && \
-    poetry config virtualenvs.create false
+RUN pip install --no-cache-dir poetry==1.6.1 && \
+    poetry config virtualenvs.create false && \
+    poetry config virtualenvs.in-project false
 
 # Set working directory
 WORKDIR /app
@@ -40,12 +39,9 @@ COPY pyproject.toml poetry.lock* ./
 RUN --mount=type=cache,target=/root/.cache/pip \
     echo "Installing Python dependencies..." && \
     python -m pip install --upgrade pip && \
-    pip install --no-cache-dir poetry==$POETRY_VERSION && \
-    poetry install --no-interaction --no-ansi --only main --no-cache || \
-    (echo "First attempt failed, retrying with --no-deps..." && \
-     poetry install --no-interaction --no-ansi --only main --no-cache --no-deps && \
-     echo "Installing with dependencies..." && \
-     poetry install --no-interaction --no-ansi --only main --no-cache)
+    poetry install --no-interaction --no-ansi --only main --no-root && \
+    # Install the package in development mode
+    poetry install --no-interaction --no-ansi
 
 # Runtime stage
 FROM --platform=linux/amd64 python:3.10-slim
@@ -93,7 +89,7 @@ RUN mkdir -p /app/logs /app/downloads /app/temp && \
     chown -R pwuser:pwuser /app/logs /app/downloads /app/temp
 
 # Install Playwright browsers
-RUN python -m playwright install --with-deps
+RUN python -m playwright install --with-deps chromium
 
 # Handle start script with proper line endings and permissions
 RUN if [ -f start_fixed.sh ]; then \
