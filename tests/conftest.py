@@ -93,8 +93,12 @@ def mock_playwright(mocker):
     mock_browser.new_context.return_value = mock_context
     mock_context.new_page.return_value = mock_page
     
-    # Mock the async context manager
-    mock_playwright = mocker.patch('playwright.async_api.async_playwright')
-    mock_playwright.return_value.__aenter__.return_value = mock_pw
+    # Setup the async context manager
+    async def async_context_manager():
+        return mock_pw
+    
+    # Mock the async_playwright function
+    mock_async_playwright = mocker.patch('playwright.async_api.async_playwright')
+    mock_async_playwright.return_value = AsyncMock(__aenter__=async_context_manager)
     
     return mock_pw, mock_browser, mock_context, mock_page

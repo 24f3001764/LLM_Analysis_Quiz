@@ -51,12 +51,7 @@ class TestBrowserManager:
         """Test that the browser initializes with the correct settings."""
         mock_pw, mock_browser, mock_context, mock_page = mock_playwright
 
-        # Mock the async context manager
-        mock_playwright.return_value.start.return_value = mock_pw
-        mock_pw.chromium.launch.return_value = mock_browser
-        mock_browser.new_context.return_value = mock_context
-        mock_context.new_page.return_value = mock_page
-
+        # Create and enter the context manager
         async with BrowserManager() as manager:
             # Verify browser was initialized correctly
             assert manager.browser is not None
@@ -188,47 +183,27 @@ class TestBrowserManager:
     @pytest.mark.asyncio
     async def test_download_file(self, mock_playwright, tmp_path):
         """Test downloading a file."""
-        _, _, _, mock_page = mock_playwright
+        mock_pw, mock_browser, mock_context, mock_page = mock_playwright
+        test_url = "https://example.com/file.pdf"
+        download_dir = str(tmp_path)
         
-        # Mock download
+        # Setup the download mock
         mock_download = AsyncMock()
-        mock_download.save_as = AsyncMock()
+        mock_page.expect_download.return_value.__aenter__.return_value = mock_download
+        mock_download.suggested_filename = "test.pdf"
         
-        # Mock download event
-        class MockDownloadEvent:
-            async def __aenter__(self):
-                return mock_download
-                
-            async def __aexit__(self, *args):
-                pass
-                
-        mock_page.expect_download.return_value = MockDownloadEvent()
-        
-        # Create a test file
-        test_file = tmp_path / "test.txt"
-        test_file.write_text("Test content")
-        
-        with patch('src.browser.magic.from_file') as mock_magic:
-            mock_magic.return_value = "text/plain"
+        # Create the manager and test download
+        async with BrowserManager() as manager:
+            manager.page = mock_page  # Inject our mock page
+            download_path = await manager.download_file(test_url, download_dir)
             
-            async with BrowserManager() as browser:
-                browser.page = mock_page
-                
-                # Test file download
-                result = await browser.download_file(
-                    "http://example.com/file.txt",
-                    save_path=str(test_file)
-                )
-                
-                # Verify the download was processed
-                assert result["url"] == "http://example.com/file.txt"
-                assert "path" in result
-                assert result["type"] == "text/plain"
-                assert result["size"] > 0
-                assert "content" in result
-                
-                # Verify the download was initiated
-                mock_page.goto.assert_called_once_with("http://example.com/file.txt")
+            # Verify the download was initiated
+            mock_page.goto.assert_called_once_with(test_url, wait_until="networkidle")
+            mock_page.expect_download.assert_called_once()
+            
+            # Verify the download path is correct
+            assert download_path == str(tmp_path / "test.pdf")
+            mock_download.save_as.assert_called_once_with(str(tmp_path / "test.pdf"))
     
     @pytest.mark.asyncio
     async def test_error_handling(self, mock_playwright):

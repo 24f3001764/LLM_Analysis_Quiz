@@ -210,11 +210,16 @@ class QuizSolver:
         ]
         
         for i, question in enumerate(self.questions, 1):
-            report.append(f"Question {i}: {getattr(question, 'text', 'No question text')}")
-            if hasattr(question, 'answer'):
-                report.append(f"  Answer: {question.answer}")
+            # Handle both object and dictionary access
+            if hasattr(question, 'text'):
+                question_text = question.text
+                answer = getattr(question, 'answer', 'Not answered')
             else:
-                report.append("  Not answered")
+                question_text = question.get('text', 'No question text')
+                answer = question.get('answer', 'Not answered')
+            
+            report.append(f"Question {i}: {question_text}")
+            report.append(f"  Answer: {answer}")
             report.append("")
         
         return "\n".join(report)
