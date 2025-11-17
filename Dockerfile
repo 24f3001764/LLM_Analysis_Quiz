@@ -30,23 +30,21 @@ RUN apt-get update && \
 WORKDIR /app
 
 # Create necessary directories with correct permissions
-RUN mkdir -p /app/src /app/logs /app/downloads /app/temp && \
+RUN mkdir -p /app/logs /app/downloads /app/temp && \
     chown -R pwuser:pwuser /app
 
 # Copy only the files needed for installing dependencies first
 COPY --chown=pwuser pyproject.toml poetry.lock* ./
 
-# Create a minimal README.md if it doesn't exist
-RUN touch README.md && chown pwuser:pwuser README.md
+# Create a minimal README.md
+RUN echo "# LLM Analysis Quiz" > README.md && \
+    chown pwuser:pwuser README.md
 
 # Install Python dependencies
 RUN echo "Installing Python dependencies..." && \
     python -m pip install --upgrade pip && \
-    # First install poetry
     pip install --user --no-cache-dir poetry==1.6.1 && \
-    # Configure poetry
     python -m poetry config virtualenvs.create false && \
-    # Install dependencies
     python -m poetry install --no-interaction --no-ansi --only main --no-cache
 
 # Install Playwright browsers
