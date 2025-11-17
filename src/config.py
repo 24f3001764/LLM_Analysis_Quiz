@@ -7,28 +7,41 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 class Settings(BaseSettings):
+    # Pydantic v2 config
+    model_config = {
+        "extra": "allow",  # Allow extra environment variables
+        "env_file": ".env",
+        "env_file_encoding": "utf-8",
+        "case_sensitive": True,
+        "validate_default": True,
+        "validate_assignment": True
+    }
+    
     # Application Metadata
     APP_NAME: str = "LLM Analysis Quiz"
     VERSION: str = "1.0.0"
-    DEBUG: bool = os.getenv("DEBUG", "False").lower() in ("true", "1", "t")
-    ENVIRONMENT: str = os.getenv("ENVIRONMENT", "development")
+    DEBUG: bool = False
+    ENVIRONMENT: str = "development"
+    
+    # API Keys
+    OPENAI_API_KEY: str = ""
+    SECRET_KEY: str = "your-secret-key-change-in-production"
+    QUIZ_SECRET: str = "default-quiz-secret"
+    API_KEY: str = ""
     
     # API Configuration
     API_PREFIX: str = "/api"
-    SECRET_KEY: str = os.getenv("SECRET_KEY", "your-secret-key-change-in-production")
-    QUIZ_SECRET: str = os.getenv("QUIZ_SECRET", "default-quiz-secret")
-    API_KEY: str = os.getenv("API_KEY", "")
     
     # Server Configuration
-    HOST: str = os.getenv("HOST", "0.0.0.0")
-    PORT: int = int(os.getenv("PORT", "8000"))
-    WORKERS: int = int(os.getenv("WORKERS", "1"))
-    RELOAD: bool = os.getenv("RELOAD", str(DEBUG)).lower() in ("true", "1", "t")
+    HOST: str = "0.0.0.0"
+    PORT: int = 8000
+    WORKERS: int = 1
+    RELOAD: bool = False
     
     # Timeout Configuration (in seconds)
-    REQUEST_TIMEOUT: int = int(os.getenv("REQUEST_TIMEOUT", "180"))  # 3 minutes
-    BROWSER_TIMEOUT: int = int(os.getenv("BROWSER_TIMEOUT", "30"))
-    API_TIMEOUT: int = int(os.getenv("API_TIMEOUT", "30"))
+    REQUEST_TIMEOUT: int = 180  # 3 minutes
+    BROWSER_TIMEOUT: int = 30
+    API_TIMEOUT: int = 30
     
     # Paths
     BASE_DIR: Path = Path(__file__).resolve().parent.parent
@@ -37,7 +50,7 @@ class Settings(BaseSettings):
     TEMP_DIR: Path = BASE_DIR / "temp"
     
     # Browser Configuration
-    HEADLESS_BROWSER: bool = os.getenv("HEADLESS_BROWSER", "True").lower() in ("true", "1", "t")
+    HEADLESS_BROWSER: bool = True
     BROWSER_LAUNCH_ARGS: List[str] = [
         "--no-sandbox",
         "--disable-setuid-sandbox",
@@ -72,12 +85,12 @@ class Settings(BaseSettings):
     ]
     
     # Security
-    CORS_ORIGINS: List[str] = json.loads(os.getenv("CORS_ORIGINS", "[\"*\"]"))
-    ALLOWED_HOSTS: List[str] = json.loads(os.getenv("ALLOWED_HOSTS", "[\"*\"]"))
-    RATE_LIMIT: str = os.getenv("RATE_LIMIT", "100/minute")
+    CORS_ORIGINS: List[str] = Field(default=["*"], env="CORS_ORIGINS")
+    ALLOWED_HOSTS: List[str] = Field(default=["*"], env="ALLOWED_HOSTS")
+    RATE_LIMIT: str = Field(default="100/minute", env="RATE_LIMIT")
     
     # Logging Configuration
-    LOG_LEVEL: str = os.getenv("LOG_LEVEL", "INFO" if not DEBUG else "DEBUG")
+    LOG_LEVEL: str = Field(default="INFO", env="LOG_LEVEL")
     LOG_FORMAT: str = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
     LOG_MAX_SIZE: int = 10 * 1024 * 1024  # 10MB
     LOG_BACKUP_COUNT: int = 5
@@ -99,10 +112,7 @@ class Settings(BaseSettings):
                 return [v]
         return v
     
-    class Config:
-        env_file = ".env"
-        env_file_encoding = "utf-8"
-        case_sensitive = True
+    # Model configuration is now handled by model_config at the class level
     
     @property
     def downloads_path(self) -> Path:
