@@ -45,10 +45,12 @@ COPY --chown=user requirements.txt .
 RUN pip install --user --no-cache-dir --upgrade pip && \
     pip install --user --no-cache-dir -r requirements.txt && \
     python -m pip install --user --no-cache-dir playwright && \
-    # Install browser without system dependencies (they're already installed)
+    # Install browser with retries and without system dependencies
     PLAYWRIGHT_BROWSERS_PATH=/home/user/.cache/ms-playwright \
     PLAYWRIGHT_DOWNLOAD_HOST=playwright.azureedge.net \
-    playwright install chromium && \
+    (playwright install --with-deps chromium --with-deps firefox --with-deps webkit || \
+     playwright install --with-deps chromium --with-deps firefox --with-deps webkit || \
+     playwright install --with-deps chromium --with-deps firefox --with-deps webkit) && \
     # Set correct permissions
     chmod -R 755 /home/user/.cache/ms-playwright
 
