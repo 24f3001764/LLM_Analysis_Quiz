@@ -245,24 +245,33 @@ async def submit_quiz(request: QuizRequest):
         )
 
 # Additional utility endpoints
+# Cache the health check response to improve performance
+_health_response = {
+    "status": "healthy",
+    "service": settings.APP_NAME,
+    "version": settings.VERSION,
+    "environment": settings.ENVIRONMENT
+}
+
 @app.get(
     "/health",
     response_model=Dict[str, Any],
     summary="Health Check",
     description="Check the health status of the API and its dependencies.",
-    tags=["Health"]
+    tags=["Health"],
+    response_description="API health status"
 )
-async def health_check():
-    """Check the health status of the API."""
+async def health_check() -> Dict[str, Any]:
+    """
+    Lightweight health check endpoint.
+    
+    This endpoint is used by the container orchestrator to determine if the service
+    is running correctly. It's designed to be as lightweight as possible.
+    """
+    # Return pre-computed response with current timestamp
     return {
-        "status": "healthy",
-        "service": settings.APP_NAME,
-        "version": settings.VERSION,
-        "timestamp": datetime.utcnow().isoformat(),
-        "environment": settings.ENVIRONMENT,
-        "dependencies": {
-            "browser": "operational"
-        }
+        **_health_response,
+        "timestamp": datetime.utcnow().isoformat()
     }
 
 # File download endpoint
