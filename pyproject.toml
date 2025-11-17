@@ -68,7 +68,3 @@ python_classes = "Test*"
 python_functions = "test_*"
 addopts = "-v --cov=src --cov-report=term-missing"
 asyncio_mode = "auto"
-
-[build-system]
-requires = ["setuptools>=42", "wheel", "setuptools_scm[toml]>=3.4"]
-build-backend = "setuptools.build_meta"
