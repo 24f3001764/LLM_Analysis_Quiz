@@ -28,36 +28,29 @@ RUN apt-get update && \
     && update-ca-certificates --fresh \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Poetry with a more reliable method
-ENV POETRY_HOME=/opt/poetry
-RUN curl -sSL https://install.python-poetry.org | python3 - --version ${POETRY_VERSION} && \
-    cd /usr/local/bin && \
-    ln -s /opt/poetry/bin/poetry && \
-    poetry config virtualenvs.create false
+# Install Poetry using pip with --user flag
+RUN pip install --user --no-cache-dir poetry==${POETRY_VERSION}
 
 # Set working directory
 WORKDIR /app
-
-# Copy only the files needed for installing dependencies first
-COPY --chown=pwuser pyproject.toml poetry.lock* ./
 
 # Create necessary directories with correct permissions
 RUN mkdir -p /app/src /app/logs /app/downloads /app/temp && \
     chown -R pwuser:pwuser /app
 
-# Install Python dependencies with more verbose output
+# Copy only the files needed for installing dependencies first
+COPY --chown=pwuser pyproject.toml poetry.lock* ./
+
+# Install Python dependencies with verbose output
 RUN echo "Installing Python dependencies..." && \
-    poetry install --no-interaction --no-ansi --only main --no-cache -v
+    python -m poetry config virtualenvs.create false && \
+    python -m poetry install --no-interaction --no-ansi --only main --no-cache -v
 
 # Install Playwright browsers
 RUN playwright install --with-deps
 
 # Copy the rest of the application
 COPY --chown=pwuser . .
-
-# Create necessary directories with correct permissions
-RUN mkdir -p /app/logs /app/downloads /app/temp && \
-    chown -R pwuser:pwuser /app
 
 # Handle start script with proper line endings and permissions
 RUN if [ -f start_fixed.sh ]; then \
