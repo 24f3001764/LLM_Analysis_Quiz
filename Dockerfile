@@ -51,8 +51,8 @@ COPY --chown=pwuser . .
 RUN mkdir -p /app/logs /app/downloads /app/temp && \
     chown -R pwuser:pwuser /app
 
-# Copy and set up the start script
-COPY --chown=pwuser start.sh /app/start.sh
+# Set up the start script
+COPY --chown=pwuser start_fixed.sh /app/start.sh
 RUN chmod +x /app/start.sh
 
 # Health check
