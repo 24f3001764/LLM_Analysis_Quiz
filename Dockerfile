@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1.4
 
 # Build stage
-FROM --platform=linux/amd64 mcr.microsoft.com/playwright/python:v1.40.0-jammy as builder
+FROM --platform=linux/amd64 python:3.10-slim as builder
 
 # Set environment variables
 ENV \
@@ -36,18 +36,27 @@ WORKDIR /app
 # Copy only the files needed for installing dependencies
 COPY pyproject.toml poetry.lock* ./
 
-# Install Python dependencies
-RUN poetry install --no-interaction --no-ansi --only main --no-cache
+# Install Python dependencies with retry logic
+RUN --mount=type=cache,target=/root/.cache/pip \
+    echo "Installing Python dependencies..." && \
+    python -m pip install --upgrade pip && \
+    pip install --no-cache-dir poetry==$POETRY_VERSION && \
+    poetry install --no-interaction --no-ansi --only main --no-cache || \
+    (echo "First attempt failed, retrying with --no-deps..." && \
+     poetry install --no-interaction --no-ansi --only main --no-cache --no-deps && \
+     echo "Installing with dependencies..." && \
+     poetry install --no-interaction --no-ansi --only main --no-cache)
 
 # Runtime stage
-FROM --platform=linux/amd64 mcr.microsoft.com/playwright/python:v1.40.0-jammy
+FROM --platform=linux/amd64 python:3.10-slim
 
-# Install runtime dependencies
+# Install Playwright system dependencies
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
     curl \
     libmagic1 \
     ca-certificates \
+    wget \
     && update-ca-certificates --fresh \
     && rm -rf /var/lib/apt/lists/*
 
@@ -62,18 +71,19 @@ ENV \
     PATH="/home/pwuser/.local/bin:${PATH}"
 
 # Create app directory and set permissions
-RUN mkdir -p /app && \
+RUN useradd -m pwuser && \
+    mkdir -p /app && \
     chown -R pwuser:pwuser /app
 
 # Switch to non-root user
 USER pwuser
 
-# Copy installed dependencies from builder
-COPY --from=builder --chown=pwuser:pwuser /usr/local/lib/python3.10/dist-packages /usr/local/lib/python3.10/dist-packages
-COPY --from=builder --chown=pwuser:pwuser /usr/local/bin/poetry /usr/local/bin/poetry
-
 # Set working directory
 WORKDIR /app
+
+# Copy installed dependencies from builder
+COPY --from=builder --chown=pwuser:pwuser /usr/local/lib/python3.10/site-packages /usr/local/lib/python3.10/site-packages
+COPY --from=builder --chown=pwuser:pwuser /usr/local/bin/poetry /usr/local/bin/poetry
 
 # Copy application code
 COPY --chown=pwuser:pwuser . .
@@ -83,7 +93,7 @@ RUN mkdir -p /app/logs /app/downloads /app/temp && \
     chown -R pwuser:pwuser /app/logs /app/downloads /app/temp
 
 # Install Playwright browsers
-RUN playwright install --with-deps
+RUN python -m playwright install --with-deps
 
 # Handle start script with proper line endings and permissions
 RUN if [ -f start_fixed.sh ]; then \
