@@ -1,35 +1,15 @@
 # Build stage
 FROM python:3.9-slim as builder
 
-# Install system dependencies and Node.js
+# Install system dependencies, Node.js and Playwright system dependencies as root
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     curl \
-    && rm -rf /var/lib/apt/lists/*
-
-# Install Node.js (required for Playwright)
-RUN curl -fsSL https://deb.nodesource.com/setup_18.x | bash - && \
-    apt-get install -y nodejs
-
-# Create a non-root user and switch to it
-RUN useradd -m -u 1000 user
-USER user
-ENV PATH="/home/user/.local/bin:$PATH"
-ENV PLAYWRIGHT_BROWSERS_PATH="/home/user/.cache/ms-playwright"
-
-# Set working directory
-WORKDIR /app
-
-# Copy requirements first to leverage Docker cache
-COPY --chown=user requirements.txt .
-
-# Install Python dependencies
-RUN pip install --user --no-cache-dir --upgrade pip && \
-    pip install --user --no-cache-dir -r requirements.txt && \
-    python -m pip install --user --no-cache-dir playwright
-
-# Install Playwright browsers and dependencies
-RUN apt-get update && apt-get install -y --no-install-recommends \
+    # Node.js installation
+    && curl -fsSL https://deb.nodesource.com/setup_18.x | bash - \
+    && apt-get install -y nodejs \
+    # Playwright system dependencies
+    && apt-get install -y --no-install-recommends \
     libnss3 \
     libnspr4 \
     libatk1.0-0 \
@@ -49,8 +29,23 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libx11-xcb1 \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Playwright browsers as non-root user
-RUN playwright install --with-deps chromium
+# Create non-root user and switch to it
+RUN useradd -m -u 1000 user
+USER user
+ENV PATH="/home/user/.local/bin:$PATH"
+ENV PLAYWRIGHT_BROWSERS_PATH="/home/user/.cache/ms-playwright"
+
+# Set working directory
+WORKDIR /app
+
+# Copy requirements first to leverage Docker cache
+COPY --chown=user requirements.txt .
+
+# Install Python dependencies and Playwright
+RUN pip install --user --no-cache-dir --upgrade pip && \
+    pip install --user --no-cache-dir -r requirements.txt && \
+    python -m pip install --user --no-cache-dir playwright && \
+    playwright install --with-deps chromium
 
 # Final stage
 FROM python:3.9-slim
