@@ -41,7 +41,10 @@ jobs:
     - name: Install Python dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install -e ".[test]"
+        # Install package in development mode with test dependencies
+        pip install -e ".[dev]"
+        # Ensure httpx is installed for test client
+        pip install httpx
     
     - name: Debug Python info
       run: |
