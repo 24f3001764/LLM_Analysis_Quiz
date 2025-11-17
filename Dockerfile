@@ -26,9 +26,6 @@ RUN apt-get update && \
     && update-ca-certificates --fresh \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Poetry using pip with --user flag
-RUN pip install --user --no-cache-dir poetry==1.6.1
-
 # Set working directory
 WORKDIR /app
 
@@ -39,10 +36,18 @@ RUN mkdir -p /app/src /app/logs /app/downloads /app/temp && \
 # Copy only the files needed for installing dependencies first
 COPY --chown=pwuser pyproject.toml poetry.lock* ./
 
-# Install Python dependencies with verbose output
+# Create a minimal README.md if it doesn't exist
+RUN touch README.md && chown pwuser:pwuser README.md
+
+# Install Python dependencies
 RUN echo "Installing Python dependencies..." && \
     python -m pip install --upgrade pip && \
-    python -m pip install --no-cache-dir -v -e .
+    # First install poetry
+    pip install --user --no-cache-dir poetry==1.6.1 && \
+    # Configure poetry
+    python -m poetry config virtualenvs.create false && \
+    # Install dependencies
+    python -m poetry install --no-interaction --no-ansi --only main --no-cache
 
 # Install Playwright browsers
 RUN playwright install --with-deps
