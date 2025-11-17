@@ -1,11 +1,13 @@
 # Use Playwright's Python image as the base
 FROM mcr.microsoft.com/playwright/python:v1.40.0-jammy
 
-# Set environment variables
-ENV PYTHONUNBUFFERED=1 \
-    PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+# Install system dependencies
+USER root
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libmagic1 \
+    && rm -rf /var/lib/apt/lists/*
 
-# Use the existing 'pwuser' that comes with the Playwright image
+# Switch back to non-root user
 USER pwuser
 ENV PATH="/home/pwuser/.local/bin:$PATH"
 
