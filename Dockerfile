@@ -34,6 +34,7 @@ RUN useradd -m -u 1000 user
 USER user
 ENV PATH="/home/user/.local/bin:$PATH"
 ENV PLAYWRIGHT_BROWSERS_PATH="/home/user/.cache/ms-playwright"
+ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
 
 # Set working directory
 WORKDIR /app
@@ -41,35 +42,18 @@ WORKDIR /app
 # Copy requirements first to leverage Docker cache
 COPY --chown=user requirements.txt .
 
-# Create a script to install Playwright with retries
-RUN echo '#!/bin/sh\n\
-set -e\n\
-max_attempts=3\n\
-attempt=1\n\
-until [ $attempt -gt $max_attempts ]\n\
-do\n\
-    echo "Attempt $attempt of $max_attempts to install Playwright browsers..."\n\
-    if playwright install --with-deps chromium --with-deps firefox --with-deps webkit; then\n\
-        echo "Playwright browsers installed successfully"\n\
-        exit 0\n\
-    else\n\
-        echo "Attempt $attempt failed, retrying... ($((max_attempts - attempt)) attempts remaining)"\n\
-        attempt=$((attempt + 1))\n\
-        sleep 5\n\
-    fi\ndone\n\
-echo "Failed to install Playwright browsers after $max_attempts attempts"\n\
-exit 1' > /home/user/install_playwright.sh && \
-    chmod +x /home/user/install_playwright.sh
-
-# Install Python dependencies and Playwright
+# Install Python dependencies and Playwright without browsers
 RUN pip install --user --no-cache-dir --upgrade pip && \
     pip install --user --no-cache-dir -r requirements.txt && \
-    python -m pip install --user --no-cache-dir playwright && \
-    # Install browsers with retry script
-    PLAYWRIGHT_BROWSERS_PATH=/home/user/.cache/ms-playwright \
+    python -m pip install --user --no-cache-dir playwright
+
+# Install browsers without system dependencies
+RUN PLAYWRIGHT_BROWSERS_PATH=/home/user/.cache/ms-playwright \
     PLAYWRIGHT_DOWNLOAD_HOST=playwright.azureedge.net \
-    /home/user/install_playwright.sh && \
-    # Set correct permissions
+    PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=0 \
+    playwright install --with-deps chromium firefox webkit --dry-run && \
+    playwright install-deps && \
+    playwright install chromium firefox webkit && \
     chmod -R 755 /home/user/.cache/ms-playwright
 
 # Final stage
