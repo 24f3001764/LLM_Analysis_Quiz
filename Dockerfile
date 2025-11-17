@@ -9,13 +9,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Install Node.js (required for Playwright)
 RUN curl -fsSL https://deb.nodesource.com/setup_18.x | bash - && \
-    apt-get install -y nodejs && \
-    npm install -g playwright
+    apt-get install -y nodejs
 
 # Create a non-root user and switch to it
 RUN useradd -m -u 1000 user
 USER user
 ENV PATH="/home/user/.local/bin:$PATH"
+ENV PLAYWRIGHT_BROWSERS_PATH="/home/user/.cache/ms-playwright"
 
 # Set working directory
 WORKDIR /app
@@ -23,14 +23,13 @@ WORKDIR /app
 # Copy requirements first to leverage Docker cache
 COPY --chown=user requirements.txt .
 
-# Install Python dependencies
+# Install Python dependencies and Playwright
 RUN pip install --user --no-cache-dir --upgrade pip && \
-    pip install --user --no-cache-dir -r requirements.txt
+    pip install --user --no-cache-dir -r requirements.txt && \
+    python -m pip install --user --no-cache-dir playwright
 
-# Install Playwright browsers as root
-USER root
+# Install Playwright browsers
 RUN python -m playwright install --with-deps chromium
-USER user
 
 # Final stage
 FROM python:3.9-slim
@@ -63,6 +62,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN useradd -m -u 1000 user
 USER user
 ENV PATH="/home/user/.local/bin:$PATH"
+ENV PLAYWRIGHT_BROWSERS_PATH="/home/user/.cache/ms-playwright"
 
 # Set working directory
 WORKDIR /app
