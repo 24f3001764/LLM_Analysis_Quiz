@@ -10,7 +10,8 @@ ENV \
     PIP_NO_CACHE_DIR=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1 \
     POETRY_VERSION=1.6.1 \
-    PATH="/home/pwuser/.local/bin:${PATH}"
+    PATH="/home/pwuser/.local/bin:${PATH}" \
+    PYTHONPATH="/app:${PYTHONPATH:-}"
 
 # Install system dependencies
 USER root
@@ -24,15 +25,19 @@ RUN --mount=type=cache,target=/var/cache/apt \
 # Install Poetry
 RUN pip install --user --no-cache-dir poetry==${POETRY_VERSION}
 
-# Set working directory and copy dependency files first for better caching
+# Set working directory
 WORKDIR /app
+
+# Copy only the files needed for installing dependencies first (better caching)
 COPY --chown=pwuser pyproject.toml poetry.lock* ./
 
 # Install Python dependencies
 RUN --mount=type=cache,target=/root/.cache/pypoetry \
     python -m poetry config virtualenvs.create false && \
-    python -m poetry install --no-interaction --no-ansi --only main && \
-    playwright install --with-deps
+    python -m poetry install --no-interaction --no-ansi --only main
+
+# Install Playwright browsers
+RUN playwright install --with-deps
 
 # Runtime stage
 FROM mcr.microsoft.com/playwright/python:v1.40.0-jammy
@@ -45,31 +50,34 @@ COPY --from=builder /home/pwuser/.local /home/pwuser/.local
 USER root
 WORKDIR /app
 
+# Copy the rest of the application
+COPY --chown=pwuser . .
+
 # Create necessary directories with correct permissions
 RUN mkdir -p /app/logs /app/downloads /app/temp && \
     chown -R pwuser:pwuser /app
 
-# Copy application code and start script
-COPY --chown=pwuser . .
-
-# Ensure start script has correct line endings and permissions
+# Handle start script with proper line endings
 RUN if [ -f start_fixed.sh ]; then \
-        cp start_fixed.sh /app/start.sh && \
-        sed -i 's/\r$//' /app/start.sh; \
+        cp start_fixed.sh /app/start.sh; \
     else \
-        cp start.sh /app/start.sh && \
-        sed -i 's/\r$//' /app/start.sh; \
+        cp start.sh /app/start.sh; \
     fi && \
+    sed -i 's/\r$//' /app/start.sh && \
     chmod +x /app/start.sh && \
     chown pwuser:pwuser /app/start.sh
+
+# Verify the start script
+RUN ls -la /app/start.sh && \
+    file /app/start.sh && \
+    head -n 1 /app/start.sh
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
     CMD curl -f http://localhost:8000/health || exit 1
 
-# Switch to non-root user and set PATH
+# Switch to non-root user
 USER pwuser
-ENV PATH="/home/pwuser/.local/bin:${PATH}"
 
 # Command to run the application
 CMD ["/app/start.sh"]
