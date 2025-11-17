@@ -65,6 +65,14 @@ def create_app() -> FastAPI:
 # Create the FastAPI app
 app = create_app()
 
+@app.on_event("startup")
+async def startup_event():
+    import time
+    logger.info("Application starting up...")
+    # Add any initialization code here
+    time.sleep(2)  # Give time for everything to initialize
+    logger.info("Startup complete!")
+
 # Request/Response Models
 class QuizRequest(BaseModel):
     """Request model for quiz submission."""

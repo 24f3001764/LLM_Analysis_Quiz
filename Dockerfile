@@ -27,5 +27,18 @@ COPY --chown=pwuser . .
 # Expose the port the app runs on
 EXPOSE 8000
 
+# Install curl for health checks
+USER root
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Switch back to non-root user
+USER pwuser
+
+# Copy and set up the start script
+COPY --chown=pwuser start.sh /app/start.sh
+RUN chmod +x /app/start.sh
+
 # Command to run the application
-CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "4"]
+CMD ["/app/start.sh"]
