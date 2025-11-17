@@ -79,3 +79,22 @@ def sample_quiz_questions():
             answer=4
         )
     ]
+
+@pytest.fixture
+def mock_playwright(mocker):
+    # Create mock objects
+    mock_pw = mocker.MagicMock()
+    mock_browser = mocker.AsyncMock()
+    mock_context = mocker.AsyncMock()
+    mock_page = mocker.AsyncMock()
+    
+    # Set up the chain of calls
+    mock_pw.chromium.launch.return_value = mock_browser
+    mock_browser.new_context.return_value = mock_context
+    mock_context.new_page.return_value = mock_page
+    
+    # Mock the async context manager
+    mock_playwright = mocker.patch('playwright.async_api.async_playwright')
+    mock_playwright.return_value.__aenter__.return_value = mock_pw
+    
+    return mock_pw, mock_browser, mock_context, mock_page

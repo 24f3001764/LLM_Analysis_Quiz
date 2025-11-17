@@ -192,7 +192,7 @@ class QuizSolver:
         for question in self.questions:
             answer = self._solve_question(question)
             answers.append({
-                "question_id": getattr(question, 'id', f"q{len(answers) + 1}"),
+                "id": getattr(question, 'id', f"q{len(answers) + 1}"),
                 "answer": answer
             })
         return answers
@@ -202,7 +202,12 @@ class QuizSolver:
         if not hasattr(self, 'questions') or not self.questions:
             return "No questions available for reporting."
         
-        report = ["Quiz Report", "============", ""]
+        report = [
+            "Quiz Report",
+            "============",
+            f"total_questions: {len(self.questions)}",
+            ""
+        ]
         
         for i, question in enumerate(self.questions, 1):
             report.append(f"Question {i}: {getattr(question, 'text', 'No question text')}")
