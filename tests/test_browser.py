@@ -51,7 +51,7 @@ class TestBrowserManager:
         """Test that the browser initializes with the correct settings."""
         mock_pw, mock_browser, mock_context, mock_page = mock_playwright
 
-        # Create and enter the context manager
+        # Setup the async context manager
         async with BrowserManager() as manager:
             # Verify browser was initialized correctly
             assert manager.browser is not None
@@ -189,8 +189,18 @@ class TestBrowserManager:
         
         # Setup the download mock
         mock_download = AsyncMock()
-        mock_page.expect_download.return_value.__aenter__.return_value = mock_download
         mock_download.suggested_filename = "test.pdf"
+        mock_download.save_as = AsyncMock()
+        
+        # Setup the async context manager for expect_download
+        class AsyncContextManager:
+            async def __aenter__(self):
+                return mock_download
+                
+            async def __aexit__(self, *args):
+                pass
+        
+        mock_page.expect_download.return_value = AsyncContextManager()
         
         # Create the manager and test download
         async with BrowserManager() as manager:
