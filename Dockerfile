@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1.4
 
-# Use Playwright's Python image as the base
-FROM --platform=linux/amd64 mcr.microsoft.com/playwright/python:v1.40.0-jammy
+# Build stage
+FROM --platform=linux/amd64 mcr.microsoft.com/playwright/python:v1.40.0-jammy as builder
 
 # Set environment variables
 ENV \
@@ -9,49 +9,81 @@ ENV \
     PYTHONDONTWRITEBYTECODE=1 \
     PIP_NO_CACHE_DIR=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1 \
-    PATH="/home/pwuser/.local/bin:${PATH}" \
-    PYTHONPATH="/app:${PYTHONPATH:-}" \
-    PORT=8000
+    POETRY_VERSION=1.6.1 \
+    POETRY_HOME="/opt/poetry" \
+    POETRY_VIRTUALENVS_CREATE=false \
+    PIP_DEFAULT_TIMEOUT=100 \
+    PYTHONPATH=/app
 
 # Install system dependencies
-USER root
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
-    libmagic1 \
     curl \
-    ca-certificates \
     build-essential \
-    python3-dev \
-    python3-venv \
+    ca-certificates \
     && update-ca-certificates --fresh \
     && rm -rf /var/lib/apt/lists/*
+
+# Install Poetry
+RUN curl -sSL https://install.python-poetry.org | python3 - && \
+    cd /usr/local/bin && \
+    ln -s /opt/poetry/bin/poetry && \
+    poetry config virtualenvs.create false
 
 # Set working directory
 WORKDIR /app
 
-# Create necessary directories with correct permissions
-RUN mkdir -p /app/logs /app/downloads /app/temp && \
-    chown -R pwuser:pwuser /app
-
-# Copy only the files needed for installing dependencies first
-COPY --chown=pwuser pyproject.toml poetry.lock* ./
-
-# Create a minimal README.md
-RUN echo "# LLM Analysis Quiz" > README.md && \
-    chown pwuser:pwuser README.md
+# Copy only the files needed for installing dependencies
+COPY pyproject.toml poetry.lock* ./
 
 # Install Python dependencies
-RUN echo "Installing Python dependencies..." && \
-    python -m pip install --upgrade pip && \
-    pip install --user --no-cache-dir poetry==1.6.1 && \
-    python -m poetry config virtualenvs.create false && \
-    python -m poetry install --no-interaction --no-ansi --only main --no-cache
+RUN poetry install --no-interaction --no-ansi --only main --no-cache
+
+# Runtime stage
+FROM --platform=linux/amd64 mcr.microsoft.com/playwright/python:v1.40.0-jammy
+
+# Install runtime dependencies
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+    curl \
+    libmagic1 \
+    ca-certificates \
+    && update-ca-certificates --fresh \
+    && rm -rf /var/lib/apt/lists/*
+
+# Set environment variables
+ENV \
+    PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    PYTHONPATH=/app \
+    PORT=8000 \
+    PATH="/home/pwuser/.local/bin:${PATH}"
+
+# Create app directory and set permissions
+RUN mkdir -p /app && \
+    chown -R pwuser:pwuser /app
+
+# Switch to non-root user
+USER pwuser
+
+# Copy installed dependencies from builder
+COPY --from=builder --chown=pwuser:pwuser /usr/local/lib/python3.10/dist-packages /usr/local/lib/python3.10/dist-packages
+COPY --from=builder --chown=pwuser:pwuser /usr/local/bin/poetry /usr/local/bin/poetry
+
+# Set working directory
+WORKDIR /app
+
+# Copy application code
+COPY --chown=pwuser:pwuser . .
+
+# Create necessary directories
+RUN mkdir -p /app/logs /app/downloads /app/temp && \
+    chown -R pwuser:pwuser /app/logs /app/downloads /app/temp
 
 # Install Playwright browsers
 RUN playwright install --with-deps
-
-# Copy the rest of the application
-COPY --chown=pwuser . .
 
 # Handle start script with proper line endings and permissions
 RUN if [ -f start_fixed.sh ]; then \
@@ -60,19 +92,14 @@ RUN if [ -f start_fixed.sh ]; then \
         cp start.sh /app/start.sh; \
     fi && \
     sed -i 's/\r$//' /app/start.sh && \
-    chmod +x /app/start.sh && \
-    chown pwuser:pwuser /app/start.sh
+    chmod +x /app/start.sh
 
 # Verify the start script
-RUN ls -la /app/start.sh && \
-    file /app/start.sh
+RUN file /app/start.sh
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
     CMD curl -f http://localhost:${PORT}/health || exit 1
-
-# Switch to non-root user
-USER pwuser
 
 # Command to run the application
 CMD ["/app/start.sh"]
