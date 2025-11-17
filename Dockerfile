@@ -45,7 +45,11 @@ COPY --chown=user requirements.txt .
 RUN pip install --user --no-cache-dir --upgrade pip && \
     pip install --user --no-cache-dir -r requirements.txt && \
     python -m pip install --user --no-cache-dir playwright && \
-    playwright install --with-deps chromium
+    # Install specific browser version without root
+    PLAYWRIGHT_BROWSERS_PATH=/home/user/.cache/ms-playwright \
+    playwright install --with-deps chromium && \
+    # Set correct permissions
+    chmod -R 755 /home/user/.cache/ms-playwright
 
 # Final stage
 FROM python:3.9-slim
