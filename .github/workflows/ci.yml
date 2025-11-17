@@ -11,7 +11,18 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: ["3.8.18", "3.9.0", "3.10.0", "3.11.0", "3.12.0"]
+        python-version: ["3.8", "3.9", "3.10", "3.11", "3.12"]
+        include:
+          - python-version: "3.8"
+            experimental: false
+          - python-version: "3.9"
+            experimental: false
+          - python-version: "3.10"
+            experimental: false
+          - python-version: "3.11"
+            experimental: false
+          - python-version: "3.12"
+            experimental: false
 
     steps:
     - uses: actions/checkout@v3
@@ -32,10 +43,22 @@ jobs:
         python -m pip install --upgrade pip
         pip install -e ".[test]"
     
+    - name: Debug Python info
+      run: |
+        python --version
+        python -m pip --version
+        which python
+        ls -la
+        
     - name: Run tests
       run: |
-        mkdir -p junit  # Create directory for test results
-        python -m pytest --cov=src --cov-report=xml --junitxml=junit/test-results.xml
+        # Create test results directory
+        mkdir -p junit
+        # Run tests with coverage and JUnit output
+        python -m pytest --cov=src --cov-report=xml --junitxml=junit/test-results.xml tests/
+        # Verify test results file was created
+        echo "Test results:"
+        ls -la junit/
       
     - name: Upload coverage to Codecov
       uses: codecov/codecov-action@v3
