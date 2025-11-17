@@ -51,21 +51,22 @@ class TestBrowserManager:
         """Test that the browser initializes with the correct settings."""
         mock_pw, mock_browser, mock_context, mock_page = mock_playwright
 
-        # Create the manager with the mock browser
-        manager = BrowserManager(browser=mock_browser)
-        await manager.__aenter__()  # Manually enter the context manager
+        # Mock the async context manager
+        mock_playwright.return_value.start.return_value = mock_pw
+        mock_pw.chromium.launch.return_value = mock_browser
+        mock_browser.new_context.return_value = mock_context
+        mock_context.new_page.return_value = mock_page
 
-        try:
+        async with BrowserManager() as manager:
             # Verify browser was initialized correctly
             assert manager.browser is not None
             assert manager.context is not None
             assert manager.page is not None
 
             # Verify browser launch arguments
+            mock_pw.chromium.launch.assert_called_once()
             mock_browser.new_context.assert_called_once()
             mock_context.new_page.assert_called_once()
-        finally:
-            await manager.__aexit__(None, None, None)  # Cleanup
 
     @pytest.mark.asyncio
     async def test_fetch_page(self, mock_playwright):
