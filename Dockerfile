@@ -1,40 +1,14 @@
-# Build stage
-FROM python:3.9-slim as builder
+# Use Playwright's Python image as the base
+FROM mcr.microsoft.com/playwright/python:v1.40.0-jammy
 
-# Install system dependencies, Node.js and Playwright system dependencies as root
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential \
-    curl \
-    # Node.js installation
-    && curl -fsSL https://deb.nodesource.com/setup_18.x | bash - \
-    && apt-get install -y nodejs \
-    # Playwright system dependencies
-    && apt-get install -y --no-install-recommends \
-    libnss3 \
-    libnspr4 \
-    libatk1.0-0 \
-    libatk-bridge2.0-0 \
-    libcups2 \
-    libdrm2 \
-    libxkbcommon0 \
-    libxcomposite1 \
-    libxdamage1 \
-    libxfixes3 \
-    libxrandr2 \
-    libgbm1 \
-    libpango-1.0-0 \
-    libcairo2 \
-    libasound2 \
-    libatspi2.0-0 \
-    libx11-xcb1 \
-    && rm -rf /var/lib/apt/lists/*
+# Set environment variables
+ENV PYTHONUNBUFFERED=1 \
+    PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
 
-# Create non-root user and switch to it
+# Create a non-root user and switch to it
 RUN useradd -m -u 1000 user
 USER user
 ENV PATH="/home/user/.local/bin:$PATH"
-ENV PLAYWRIGHT_BROWSERS_PATH="/home/user/.cache/ms-playwright"
-ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
 
 # Set working directory
 WORKDIR /app
@@ -42,59 +16,9 @@ WORKDIR /app
 # Copy requirements first to leverage Docker cache
 COPY --chown=user requirements.txt .
 
-# Install Python dependencies and Playwright without browsers
+# Install Python dependencies
 RUN pip install --user --no-cache-dir --upgrade pip && \
-    pip install --user --no-cache-dir -r requirements.txt && \
-    python -m pip install --user --no-cache-dir playwright
-
-# Install browsers without system dependencies
-RUN PLAYWRIGHT_BROWSERS_PATH=/home/user/.cache/ms-playwright \
-    PLAYWRIGHT_DOWNLOAD_HOST=playwright.azureedge.net \
-    PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=0 \
-    playwright install --with-deps chromium firefox webkit --dry-run && \
-    playwright install-deps && \
-    playwright install chromium firefox webkit && \
-    chmod -R 755 /home/user/.cache/ms-playwright
-
-# Final stage
-FROM python:3.9-slim
-
-# Install runtime dependencies
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    # Playwright dependencies
-    libglib2.0-0 \
-    libnss3 \
-    libatk1.0-0 \
-    libatk-bridge2.0-0 \
-    libcups2 \
-    libdrm2 \
-    libxkbcommon0 \
-    libxcomposite1 \
-    libxdamage1 \
-    libxfixes3 \
-    libxrandr2 \
-    libgbm1 \
-    libpango-1.0-0 \
-    libcairo2 \
-    libasound2 \
-    libatspi2.0-0 \
-    libx11-xcb1 \
-    # For python-magic
-    libmagic1 \
-    && rm -rf /var/lib/apt/lists/*
-
-# Create non-root user
-RUN useradd -m -u 1000 user
-USER user
-ENV PATH="/home/user/.local/bin:$PATH"
-ENV PLAYWRIGHT_BROWSERS_PATH="/home/user/.cache/ms-playwright"
-
-# Set working directory
-WORKDIR /app
-
-# Copy installed Python packages and Playwright browsers from builder
-COPY --from=builder --chown=user /home/user/.local /home/user/.local
-COPY --from=builder --chown=user /home/user/.cache/ms-playwright /home/user/.cache/ms-playwright
+    pip install --user --no-cache-dir -r requirements.txt
 
 # Copy application code
 COPY --chown=user . .
