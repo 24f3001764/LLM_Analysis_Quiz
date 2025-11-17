@@ -1,60 +1,4 @@
-# syntax=docker/dockerfile:1.4
-
-# Build stage
-FROM --platform=linux/amd64 python:3.10-slim as builder
-
-# Set environment variables
-ENV \
-    PYTHONUNBUFFERED=1 \
-    PYTHONDONTWRITEBYTECODE=1 \
-    PIP_NO_CACHE_DIR=1 \
-    PIP_DISABLE_PIP_VERSION_CHECK=1 \
-    POETRY_VERSION=1.6.1 \
-    POETRY_HOME="/opt/poetry" \
-    POETRY_VIRTUALENVS_CREATE=false \
-    PIP_DEFAULT_TIMEOUT=100 \
-    PYTHONPATH=/app
-
-# Install system dependencies
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends \
-    curl \
-    build-essential \
-    ca-certificates \
-    && update-ca-certificates --fresh \
-    && rm -rf /var/lib/apt/lists/*
-
-# Install Poetry
-RUN pip install --no-cache-dir poetry==1.6.1 && \
-    poetry config virtualenvs.create false && \
-    poetry config virtualenvs.in-project false
-
-# Set working directory
-WORKDIR /app
-
-# Copy only the files needed for installing dependencies
-COPY pyproject.toml poetry.lock* ./
-
-# Install Python dependencies with retry logic
-RUN --mount=type=cache,target=/root/.cache/pip \
-    echo "Installing Python dependencies..." && \
-    python -m pip install --upgrade pip && \
-    poetry install --no-interaction --no-ansi --only main --no-root && \
-    # Install the package in development mode
-    poetry install --no-interaction --no-ansi
-
-# Runtime stage
 FROM --platform=linux/amd64 python:3.10-slim
-
-# Install Playwright system dependencies
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends \
-    curl \
-    libmagic1 \
-    ca-certificates \
-    wget \
-    && update-ca-certificates --fresh \
-    && rm -rf /var/lib/apt/lists/*
 
 # Set environment variables
 ENV \
@@ -63,8 +7,18 @@ ENV \
     PIP_NO_CACHE_DIR=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1 \
     PYTHONPATH=/app \
-    PORT=8000 \
-    PATH="/home/pwuser/.local/bin:${PATH}"
+    PORT=8000
+
+# Install system dependencies
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+    curl \
+    build-essential \
+    ca-certificates \
+    libmagic1 \
+    wget \
+    && update-ca-certificates --fresh \
+    && rm -rf /var/lib/apt/lists/*
 
 # Create app directory and set permissions
 RUN useradd -m pwuser && \
@@ -77,35 +31,29 @@ USER pwuser
 # Set working directory
 WORKDIR /app
 
-# Copy installed dependencies from builder
-COPY --from=builder --chown=pwuser:pwuser /usr/local/lib/python3.10/site-packages /usr/local/lib/python3.10/site-packages
-COPY --from=builder --chown=pwuser:pwuser /usr/local/bin/poetry /usr/local/bin/poetry
+# Copy requirements first for better caching
+COPY --chown=pwuser:pwuser pyproject.toml ./
+
+# Install Python dependencies
+RUN pip install --upgrade pip && \
+    pip install poetry==1.6.1 && \
+    poetry config virtualenvs.create false && \
+    poetry install --no-interaction --no-ansi --only main
 
 # Copy application code
 COPY --chown=pwuser:pwuser . .
 
+# Install Playwright and its dependencies
+RUN pip install playwright==1.40.0 && \
+    playwright install --with-deps chromium
+
 # Create necessary directories
 RUN mkdir -p /app/logs /app/downloads /app/temp && \
-    chown -R pwuser:pwuser /app/logs /app/downloads /app/temp
+    chmod -R 755 /app/logs /app/downloads /app/temp
 
-# Install Playwright browsers
-RUN python -m playwright install --with-deps chromium
-
-# Handle start script with proper line endings and permissions
-RUN if [ -f start_fixed.sh ]; then \
-        cp start_fixed.sh /app/start.sh; \
-    else \
-        cp start.sh /app/start.sh; \
-    fi && \
-    sed -i 's/\r$//' /app/start.sh && \
-    chmod +x /app/start.sh
-
-# Verify the start script
-RUN file /app/start.sh
+# Use start script if it exists, otherwise use default command
+CMD ["/bin/sh", "-c", "if [ -f start_fixed.sh ]; then exec /bin/sh start_fixed.sh; elif [ -f start.sh ]; then exec /bin/sh start.sh; else echo 'No start script found'; exit 1; fi"]
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
     CMD curl -f http://localhost:${PORT}/health || exit 1
-
-# Command to run the application
-CMD ["/app/start.sh"]

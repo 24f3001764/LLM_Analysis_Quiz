@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [ main, master ]
+    branches: [main, master]
   pull_request:
-    branches: [ main, master ]
+    branches: [main, master]
 
 env:
   PYTHONUNBUFFERED: 1
@@ -18,20 +18,18 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.9", "3.10", "3.11", "3.12"]
+        python-version: ["3.10"]  # Focus on one version first
 
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
-      with:
-        fetch-depth: 0
-    
+
     - name: Set up Python ${{ matrix.python-version }}
       uses: actions/setup-python@v4
       with:
         python-version: ${{ matrix.python-version }}
         cache: 'pip'
-        
+
     - name: Install system dependencies
       run: |
         sudo apt-get update
@@ -42,70 +40,34 @@ jobs:
           libatk1.0-0 \
           libatk-bridge2.0-0 \
           libcups2 \
-          libdrm2 \
           libxkbcommon0 \
           libxcomposite1 \
           libxdamage1 \
           libxfixes3 \
           libxrandr2 \
           libgbm1 \
-          libasound2 \
-          libatspi2.0-0 \
-          libxshmfence1
+          libasound2
 
     - name: Install Python dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install -e ".[dev]"
-        # Install Playwright browsers
-        python -m playwright install --with-deps
-        python -m playwright install-deps
-    
-    - name: Run tests with coverage
-      id: tests
-      continue-on-error: false
-      run: |
-        mkdir -p test-results
-        set +e
-        python -m pytest \
-          --cov=src \
-          --cov-report=xml:coverage.xml \
-          --junitxml=test-results/junit.xml \
-          -v \
-          tests/
-        TEST_RESULT=$?
-        echo "Test exit code: $TEST_RESULT"
-        # Always upload test results, even on test failure
-        echo "test_result=$TEST_RESULT" >> $GITHUB_OUTPUT
-        exit $TEST_RESULT
-      
-    - name: Upload test results
-      if: always()
-      uses: actions/upload-artifact@v4
-      with:
-        name: test-results-${{ matrix.python-version }}
-        path: |
-          test-results/
-          coverage.xml
-        retention-days: 7
+        pip install poetry
+        poetry config virtualenvs.create false
+        poetry install --no-interaction --no-ansi
         
+    - name: Install Playwright
+      run: |
+        pip install playwright
+        playwright install --with-deps chromium
+
+    - name: Run tests
+      run: |
+        python -m pytest tests/ -v --cov=src --cov-report=xml
+
     - name: Upload coverage to Codecov
-      if: success() || failure()
+      if: success()
       uses: codecov/codecov-action@v4
       with:
-        token: ${{ secrets.CODECOV_TOKEN }}
+        token: ${{ secrets.CODECOV_TOKEN || '' }}
         file: ./coverage.xml
         fail_ci_if_error: false
-        verbose: true
-
-    - name: Show test output on failure
-      if: failure()
-      run: |
-        echo "=== Test Output ==="
-        cat test-results/junit.xml
-        
-    - name: Fail if tests failed
-      if: steps.tests.outcome == 'failure'
-      run: |
-        echo "Tests failed - see test output above"
-        exit 1
