@@ -1,4 +1,5 @@
 import pytest
+from unittest.mock import MagicMock, patch
 from typing import Dict, List, Any
 
 # Test cases for different prompt types with code word testing
