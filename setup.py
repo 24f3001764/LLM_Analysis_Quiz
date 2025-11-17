@@ -16,5 +16,5 @@ setup(
         "numpy>=1.24.0",
         "python-magic>=0.4.27",
     ],
-    python_requires=">=3.9",
+    python_requires=">=3.8.0",
 )
